@@ -17,14 +17,29 @@ from matplotlib.font_manager import FontProperties
 font = FontProperties(fname=r"C:\Windows\Fonts\长仿宋体.ttf")
 
 
+def date_to_timestamp(date:str):
+    date = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
+    stamp = int(date.timestamp())
+    return stamp
+
+
+
 class DataAnalysis:
     def __init__(
         self, files_folder_path: str, st_stamp: int, ed_stamp: int, mid_stamp: int
     ) -> None:
         self.mid_stamp = mid_stamp
         self.data = self.time_range_pick(files_folder_path, st_stamp, ed_stamp)
-        self.xs = None
-        self.ys = None
+
+        data = self.data
+        xs = data[:, 0].astype(float)  # 将字符串时间戳转为浮点数
+        ys = np.diff(xs)
+        ys = ys / 60  # y轴的持续时间转为分钟单位
+        ys = np.insert(ys, 0, 0)  # y轴的持续时间转为分钟单位
+        xs = pd.to_datetime(xs + 8 * 60 * 60, unit="s")
+
+        self.xs = xs
+        self.ys = ys
 
     # 根据文件名中的时间戳信息挑选指定时间范围内的数据并且排序后输出
     def time_range_pick(self, files_folder_path: str, st_stamp: int, ed_stamp: int):
@@ -58,21 +73,29 @@ class DataAnalysis:
         print("复制成功")
 
     # 数据分析
-    def data_analysis(self):
+    def data_split_analysis(self):
+        xs = self.xs
+        ys = self.ys
         data = self.data
         mid_stamp = self.mid_stamp
 
-        day_data = data[data[:, 0] < mid_stamp]
-        night_data = data[data[:, 0] < mid_stamp]
-        day_non_comliance_num = day_data[:, 1].sum()
-        night_non_comliance_num = night_data[:, 1].sum()
-
+        day_data = data[data[:,0].astype(float)<mid_stamp]
+        night_data = data[data[:,0].astype(float)>=mid_stamp]
+        day_non_comliance_num = (day_data[:, 1].astype(int)).sum()
+        night_non_comliance_num = (night_data[:, 1].astype(int)).sum()
         day_num = len(day_data)
         night_num = len(night_data)
         day_comliance_num = day_num - day_non_comliance_num
         night_comliance_num = night_num - night_non_comliance_num
 
+        tol_num = len(data)
+        comliance_num = day_comliance_num + night_comliance_num
+        non_comliance_num = day_non_comliance_num + night_non_comliance_num
+
         res_list = {
+            'tol_num':tol_num,
+            'comliance_num':comliance_num,
+            'non_comliance_num':non_comliance_num,
             "day_num": day_num,
             "night_num": night_num,
             "day_compliance_num": day_comliance_num,
@@ -86,14 +109,14 @@ class DataAnalysis:
     # 将数据绘制为折线图
     def data_plot(self, save_path: str = ""):
         if self.xs is None or self.ys is None:
-            self.data_analysis()
+            self.anomaly_data_analysis()
         data = self.data
         xs = self.xs
         ys = self.ys
         fig, ax = plt.subplots(figsize=(128, 12), dpi=200)
         plt.plot(xs, ys)
         for index, x in enumerate(xs):
-            if data[index, 1] == 1:
+            if int(data[index][1]) == 1:
                 color = "red"
             else:
                 color = "green"
@@ -118,15 +141,10 @@ class DataAnalysis:
         plt.show()
         print("finished")
 
-    def data_analysis(self):
+    def anomaly_data_analysis(self):
         data = self.data
-        xs = data[:, 0].astype(float)  # 将字符串时间戳转为浮点数
-        ys = np.diff(xs)
-        ys = ys / 60  # y轴的持续时间转为分钟单位
-        ys = np.insert(ys, 0, 0)  # y轴的持续时间转为分钟单位
-        xs = pd.to_datetime(xs + 8 * 60 * 60, unit="s")
-        self.xs = xs
-        self.ys = ys
+        xs = self.xs
+        ys = self.ys
         csv_file = open("data.csv", "w", newline="", encoding="gbk")
         writer = csv.writer(csv_file)
         writer.writerow(
@@ -145,14 +163,18 @@ class DataAnalysis:
                     f"{data[i][2]}",
                 ]
             )
-            print(data[i - 1], data[i])
-            print(i, xs[i - 1], xs[i])
         csv_file.close()
 
 
 if __name__ == "__main__":
+    ed_stamp = date_to_timestamp('2024-07-21 00:00:00')
+    st_stamp = date_to_timestamp('2024-07-10 00:00:00')
+    mid_stamp = date_to_timestamp('2024-07-15 00:00:00')
+    print(st_stamp,ed_stamp,mid_stamp)
     files_folder_path = r"C:\Users\01477483\Desktop\临时文件\数据统计\imgs"
     out_folder_path = r"C:\Users\01477483\Desktop\临时文件\数据统计\output"
-    demo = DataAnalysis(files_folder_path, 1720911600, 1720998000, 1720954800)
-    # demo.data_plot()
-    demo.data_analysis()
+    demo = DataAnalysis(files_folder_path, st_stamp, ed_stamp, mid_stamp)
+    demo.anomaly_data_analysis()
+    demo.data_split_analysis()
+    demo.data_plot()
+    
