@@ -5,16 +5,15 @@ import os
 import shutil
 import time
 import csv
-import datetime
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from matplotlib.ticker import MultipleLocator
+from tqdm import tqdm
 from datetime import datetime
-from matplotlib.font_manager import FontProperties
-
-font = FontProperties(fname=r"C:\Windows\Fonts\长仿宋体.ttf")
+#from matplotlib.ticker import MultipleLocator
+#from matplotlib.font_manager import FontProperties
+#font = FontProperties(fname=r"C:\Windows\Fonts\长仿宋体.ttf")
 
 
 def date_to_timestamp(date:str):
@@ -22,15 +21,12 @@ def date_to_timestamp(date:str):
     stamp = int(date.timestamp())
     return stamp
 
-
-
 class DataAnalysis:
     def __init__(
         self, files_folder_path: str, st_stamp: int, ed_stamp: int, mid_stamp: int
     ) -> None:
         self.mid_stamp = mid_stamp
         self.data = self.time_range_pick(files_folder_path, st_stamp, ed_stamp)
-
         data = self.data
         xs = data[:, 0].astype(float)  # 将字符串时间戳转为浮点数
         ys = np.diff(xs)
@@ -45,7 +41,7 @@ class DataAnalysis:
     def time_range_pick(self, files_folder_path: str, st_stamp: int, ed_stamp: int):
         files = os.listdir(files_folder_path)
         new_list = []
-        for file_full_name in files:
+        for file_full_name in tqdm(files):
             suffix = file_full_name.split(".")[-1]
             file_name = file_full_name[: -(len(suffix) + 1)]
             stses = file_name.split("_")
@@ -63,19 +59,18 @@ class DataAnalysis:
             new_list.append([time_stamp, person_flag, file_full_path])
         new_list.sort(key=lambda x: x[0])
         new_list = np.asarray(new_list)
+        print('{}到{}时间范围内的数据筛选完成'.format(st_stamp, ed_stamp))
         return new_list
 
     # 将列表中的文件复制到另一个文件夹
     def file_out(self, output_direction: str):
         file_full_paths = self.data[:, 2]
-        for file_full_path in file_full_paths:
+        for file_full_path in tqdm(file_full_paths):
             shutil.copy2(file_full_path, output_direction)
-        print("复制成功")
+        print("复制完成，共{}份文件".format(len(self.data)))
 
     # 数据分析
     def data_split_analysis(self):
-        xs = self.xs
-        ys = self.ys
         data = self.data
         mid_stamp = self.mid_stamp
 
@@ -103,7 +98,6 @@ class DataAnalysis:
             "night_compliance_num": night_comliance_num,
             "night_non-compliance_num": night_non_comliance_num,
         }
-        print(res_list)
         return res_list
 
     # 将数据绘制为折线图
@@ -115,7 +109,7 @@ class DataAnalysis:
         ys = self.ys
         fig, ax = plt.subplots(figsize=(128, 12), dpi=200)
         plt.plot(xs, ys)
-        for index, x in enumerate(xs):
+        for index, x in enumerate(tqdm(xs)):
             if int(data[index][1]) == 1:
                 color = "red"
             else:
@@ -139,7 +133,7 @@ class DataAnalysis:
         # 显示图表
         # plt.tight_layout()
         plt.show()
-        print("finished")
+        print("图像绘制完成")
 
     def anomaly_data_analysis(self):
         data = self.data
@@ -165,16 +159,25 @@ class DataAnalysis:
             )
         csv_file.close()
 
+def last_24hous_report():
+    ed_stamp = time.time()
+    st_stamp = ed_stamp-9*24*60*60
+    mid_stamp = 0.5*(st_stamp + ed_stamp)
+    return st_stamp, mid_stamp, ed_stamp
+
 
 if __name__ == "__main__":
-    ed_stamp = date_to_timestamp('2024-07-21 00:00:00')
-    st_stamp = date_to_timestamp('2024-07-10 00:00:00')
-    mid_stamp = date_to_timestamp('2024-07-15 00:00:00')
-    print(st_stamp,ed_stamp,mid_stamp)
-    files_folder_path = r"C:\Users\01477483\Desktop\临时文件\数据统计\imgs"
-    out_folder_path = r"C:\Users\01477483\Desktop\临时文件\数据统计\output"
+    st_stamp = date_to_timestamp('2024-08-03 00:00:00')
+    mid_stamp = date_to_timestamp('2024-08-03 12:00:00')
+    ed_stamp = date_to_timestamp('2024-08-03 23:59:59')
+    #print(st_stamp,ed_stamp,mid_stamp)
+    files_folder_path = r"D:\Code\Python\HumanDetection_yolov8\imgs\channel1"
+    out_folder_path = r"D:\Code\Python\CommonTools\output"
+    #st_stamp,  mid_stamp, ed_stamp = last_24hous_report()
     demo = DataAnalysis(files_folder_path, st_stamp, ed_stamp, mid_stamp)
-    demo.anomaly_data_analysis()
-    demo.data_split_analysis()
-    demo.data_plot()
+    #demo.anomaly_data_analysis()
+    res = demo.data_split_analysis()
+    print('总次数{}  合格次数{}  合格率{:.2f}%  不合格次数{}  不合格率{:.2f}%'.format(res['tol_num'],res['comliance_num'],res['comliance_num']/res['tol_num']*100,res['non_comliance_num'],res['non_comliance_num']/res['tol_num']*100))
+    demo.file_out(out_folder_path)
+    demo.data_plot(save_path=r'D:\Code\Python\CommonTools')
     
